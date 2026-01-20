@@ -39,3 +39,8 @@ fi
 # Exit
 exit 0
 
+
+
+#Acknowledgement
+#Google search on finding the directory Exists or not 
+#https://www.google.com/search?q=bash+how+to+check+if+directory+exists+%3F
