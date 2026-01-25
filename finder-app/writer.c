@@ -15,6 +15,7 @@
  * Acknowledgements:
  *   Usage of syslog referenced from:
  *   https://stackoverflow.com/questions/8485333/syslog-command-in-c-code
+ *   Linux System Programming by Robert Love Chapter 2
  *
  ******************************************************************************/
 
@@ -26,6 +27,9 @@
 #include <string.h>     // String handling (strlen)
 #include <syslog.h>     // System logging
 #include <errno.h>      // Error numbers
+
+// Macro for file permission mode (owner read/write, group/others read)
+#define FILE_MODE 0644
 
 int main(int argc, char *argv[])
 {
@@ -53,11 +57,11 @@ int main(int argc, char *argv[])
     // O_CREAT   : Create file if it does not exist
     // O_TRUNC   : Truncate file to zero length if it exists
     // 0644      : File permission (owner read/write, group/others read)
-    int fd = open(inputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(inputfile, O_WRONLY | O_CREAT | O_TRUNC, FILE_MODE);
 
     if (fd == -1) {
         perror("Open");  // Print error to stderr
-        syslog(LOG_ERR, "Failed to open file %s", inputfile);
+        syslog(LOG_ERR, "Failed to open file %s: %s", inputfile,strerror(errno));
         closelog();
         return 1;
     }
@@ -66,7 +70,7 @@ int main(int argc, char *argv[])
     ssize_t nr = write(fd, inputstring, strlen(inputstring));
     if (nr == -1) {
         perror("Write");
-        syslog(LOG_ERR, "Failed to write to file %s", inputfile);
+        syslog(LOG_ERR, "Failed to write to file %s: %s", inputfile,strerror(errno));
         close(fd);
         closelog();
         return 1;
@@ -77,7 +81,7 @@ int main(int argc, char *argv[])
     // Close the file descriptor
     if (close(fd) == -1) {
         perror("Close");
-        syslog(LOG_ERR, "Error closing file %s", inputfile);
+        syslog(LOG_ERR, "Error closing file %s: %s", inputfile,strerror(errno));
         closelog();
         return 1;
     }
