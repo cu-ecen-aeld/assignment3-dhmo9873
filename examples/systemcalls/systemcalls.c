@@ -16,8 +16,23 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+	if (cmd == NULL) {
+        return false;
+    }
 
-    return true;
+    int status = system(cmd);
+
+    // system() itself failed
+    if (status == -1) {
+        return false;
+    }
+
+    // Check if the command exited normally and with exit code 0
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        return true;
+    }
+
+    return false;	
 }
 
 /**
@@ -47,7 +62,7 @@ bool do_exec(int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
 
 /*
  * TODO:
@@ -61,7 +76,32 @@ bool do_exec(int count, ...)
 
     va_end(args);
 
-    return true;
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        // fork failed
+        return false;
+    }
+
+    if (pid == 0) {
+        // child process
+        execv(command[0], command);
+
+        // execv only returns on failure
+        exit(1);
+    }
+
+    // parent process
+    int status;
+    if (waitpid(pid, &status, 0) == -1) {
+        return false;
+    }
+
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        return true;
+    }
+
+    return false;
 }
 
 /**
