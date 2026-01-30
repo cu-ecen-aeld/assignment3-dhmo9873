@@ -16,22 +16,31 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+	// If cmd is NULL, there is no command to execute, so return false
 	if (cmd == NULL) {
         return false;
     }
 
+	// Call the system() function to execute the command
+    // system() returns:
+    //   -1    → if there was an error invoking the shell
+    //   otherwise → exit status of the command executed
     int status = system(cmd);
 
-    // system() itself failed
+    // If system() failed to execute the shell, return false
     if (status == -1) {
         return false;
     }
 
-    // Check if the command exited normally and with exit code 0
+
+    // WIFEXITED(status) checks if the command terminated normally
+    // WEXITSTATUS(status) gets the exit code of the command
+    // Return true only if the command exited normally with status 0
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
         return true;
     }
 
+	// If the command did not exit normally or exit code was non-zero, return false
     return false;	
 }
 
@@ -76,31 +85,39 @@ bool do_exec(int count, ...)
 
     va_end(args);
 
+	// Fork a new process
     pid_t pid = fork();
 
     if (pid == -1) {
-        // fork failed
+        // fork failed → cannot create child process
         return false;
     }
 
     if (pid == 0) {
-        // child process
+        // CHILD PROCESS
+        // Execute the command with execv
+        // execv replaces the child process memory with the new program
+        // It only returns on failure
         execv(command[0], command);
 
-        // execv only returns on failure
+        // If execv failed, exit child with non-zero status
         exit(1);
     }
 
     // parent process
+	// wait for the child process to finish
     int status;
     if (waitpid(pid, &status, 0) == -1) {
+		//wait pid failed
         return false;
     }
 
+	// Check if child exited normally and returned 0
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
         return true;
     }
 
+	// Child exited with non-zero status or abnormal termination
     return false;
 }
 
@@ -135,16 +152,19 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
     va_end(args);
 
+	// Fork a new process
     pid_t pid = fork();
 
+	// Use switch-case to handle fork result
 	switch (pid) {
-    	case -1:
+    	case -1: // fork failed
 		{
 			perror("fork");
 			return false;
 		}
 		case 0: //child process 
 		{
+			// Open the output file for writing (create/truncate)
     	    int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     	    if (fd == -1) {
 				perror("open");
@@ -153,14 +173,15 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 			}
 
     	    // Redirect stdout to the file
-    	    if (dup2(fd, 1) < 0) {
+    	    if (dup2(fd, STDOUT_FILENO) < 0) {
     	        perror("dup2");
 				close(fd);
     	        exit(1);
     	    }
 
-    	    close(fd);
+    	    close(fd); // Close original fd; stdout now points to the file
 
+			// Execute the command
     	    execv(command[0], command);
 
     	    // execv only returns on failure
@@ -171,13 +192,17 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     	{
 			// parent process
     		int status;
+			// Wait for child process to finish
     		if (waitpid(pid, &status, 0) == -1) {
     		    return false;
-    		} 
+    		}
+
+			// Check if child exited normally with exit code 0
 			if (WIFEXITED(status) && WEXITSTATUS(status) == 0 )  {
     		    return true;
     		}
     		
+			// Child exited abnormally or with non-zero status
 			return false;
 		}
 	}
