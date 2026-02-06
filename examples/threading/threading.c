@@ -15,9 +15,13 @@ void* threadfunc(void* thread_param)
     // hint: use a cast like the one below to obtain thread arguments from your parameter
 	// USED Example from Chapter 7 , page 238 , mutex example
 	struct thread_data* thread_func_args = (struct thread_data *) thread_param;
+	/* wait before obtaining mutex */
+    usleep(thread_func_args->wait_to_obtain_ms * 1000);
 
 	pthread_mutex_lock (thread_func_args->mutex);
 	thread_func_args->thread_complete_success = true;
+	/* wait before releasing mutex */
+    usleep(thread_func_args->wait_to_release_ms * 1000);
 	pthread_mutex_unlock (thread_func_args->mutex);
     
 	return thread_param;
