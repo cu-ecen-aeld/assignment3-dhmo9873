@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # First, check how many arguments were provided
 ARG_COUNT=$#

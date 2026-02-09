@@ -12,7 +12,7 @@ WRITEDIR=/tmp/aeld-data
 #Read config files from target rootfs
 CONF_DIR=/etc/finder-app/conf
 username=$(cat ${CONF_DIR}/username.txt)
-assignment=$(cat $(CONF_DIR)/assignment.txt)
+assignment=$(cat ${CONF_DIR}/assignment.txt)
 
 if [ $# -lt 3 ]
 then
