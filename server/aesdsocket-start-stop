@@ -1,0 +1,58 @@
+#!/bin/sh
+#https://stackoverflow.com/questions/16139940/what-is-start-stop-daemon-in-linux-scripting
+#https://chatgpt.com/c/698d4ffd-d6d8-8329-8393-fb083428affa
+#reference used https://gist.github.com/RichardBronosky/b037de3e8763887b034298057200bd02
+#https://unix.stackexchange.com/questions/429284/when-will-s99-launch-if-it-isnt-in-a-normal-form
+### BEGIN INIT INFO
+# Provides:          aesdsocket
+# Required-Start:
+# Required-Stop:
+# Default-Start:     S
+# Default-Stop:      0 6
+# Short-Description: AESD socket server
+### END INIT INFO
+
+NAME="aesdsocket"
+DAEMON="/usr/bin/aesdsocket"
+PIDFILE="/var/run/${NAME}.pid"
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+case "$1" in
+    start)
+        echo "Starting $NAME"
+        start-stop-daemon --start \
+            --quiet \
+            --background \
+            --make-pidfile \
+            --pidfile $PIDFILE \
+            --exec $DAEMON -- -d
+        ;;
+    stop)
+        echo "Stopping $NAME"
+        start-stop-daemon --stop \
+            --quiet \
+            --pidfile $PIDFILE \
+            --remove-pidfile
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        start-stop-daemon --status --pidfile $PIDFILE
+        case $? in
+            0) echo "$NAME is running" ;;
+            1) echo "$NAME not running but pid file exists" ;;
+            3) echo "$NAME is not running" ;;
+            4) echo "Unable to determine $NAME status" ;;
+        esac
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
+
