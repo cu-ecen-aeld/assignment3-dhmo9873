@@ -13,15 +13,13 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
-#define MYPORT "9000"  // the port users will be connecting to
-#define BACKLOG 10     // how many pending connections queue holds
+#define MYPORT "9000"
+#define BACKLOG 10
 
 //int exit_flag = 0
 volatile sig_atomic_t exit_flag = 0;;
 
 void handle_signal(int sig) {
-
-	printf("Caught signal %d\n", sig);
 	exit_flag = 1;
 }
 
@@ -30,7 +28,7 @@ int main(void)
 
 	struct sigaction sa;
 	sa.sa_handler = handle_signal;
-	sa.sa_flags = 0; // or SA_RESTART
+	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
 
 	if (sigaction(SIGINT, &sa, NULL) == -1) {
@@ -46,10 +44,10 @@ int main(void)
 	struct sockaddr_storage their_addr;
 	socklen_t addr_size;
 	struct addrinfo hints, *res;
-	int sockfd, new_fd, write_fd;
+	int sockfd, new_fd;
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;  
+	hints.ai_family = AF_UNSPEC;  
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;     
 
@@ -58,7 +56,6 @@ int main(void)
 		fprintf(stderr,"getaddrinfo: %s\n",gai_strerror(status));
 		return -1;
 	}
-	// make a socket, bind it, and listen on it:
 
 	sockfd = socket(res->ai_family, res->ai_socktype,res->ai_protocol);
 	if (sockfd < 0){
@@ -77,15 +74,16 @@ int main(void)
 	}
 	freeaddrinfo(res);
 
-	// now accept an incoming connection:
 
 	addr_size = sizeof (their_addr);
 	while (!exit_flag) {
 		new_fd = accept(sockfd, (struct sockaddr *)&their_addr,&addr_size);
 
 		if (new_fd < 0) {
+			if (errno == EINTR && exit_flag)
+				break;
 			perror("accept");
-			return -1;
+			continue;
 		}
 
 		char buffer[1024];
@@ -109,14 +107,12 @@ int main(void)
 
 			if (memchr(packet, '\n', packet_len) != NULL)
 			{
-				/* Append to file */
 				int fd = open("/var/tmp/aesdsocketdata", O_WRONLY | O_CREAT | O_APPEND, 0644);
 				if (fd >= 0) {
 					write(fd, packet, packet_len);
 					close(fd);
 				}
 
-				/* Send full file back */
 				fd = open("/var/tmp/aesdsocketdata", O_RDONLY);
 				if (fd >= 0) {
 					ssize_t r;
