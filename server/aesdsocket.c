@@ -44,7 +44,7 @@ void* handle_connections(void *arg){
 	char ipstr[INET6_ADDRSTRLEN];
 	void *addr;
 
-	if ((*(conn->their_addr)).ss_family == AF_INET) {
+	if (conn->their_addr->ss_family == AF_INET) {
 		struct sockaddr_in *ipv4 = (struct sockaddr_in *)conn->their_addr;
 		addr = &(ipv4->sin_addr);
 	} else {
@@ -52,7 +52,7 @@ void* handle_connections(void *arg){
 		addr = &(ipv6->sin6_addr);
 	}
 
-	inet_ntop((*(conn->their_addr)).ss_family, addr, ipstr, sizeof(ipstr));
+	inet_ntop(conn->their_addr->ss_family, addr, ipstr, sizeof(ipstr));
 	syslog(LOG_INFO, "Accepted connection from %s", ipstr);
 
 	char buffer[1024];
@@ -108,6 +108,7 @@ void* handle_connections(void *arg){
 	close(conn->conn_id);
 
 	syslog(LOG_INFO, "Closed connection from %s", ipstr);
+	conn->thread_complete_success = true;
 
 	return NULL;
 }
@@ -233,12 +234,21 @@ int main(int argc, char* argv[])
 		
 		if (new_node == NULL){
 			syslog(LOG_INFO, "Malloc for new thread_node creation failed");
+			close(new_fd);
 			continue;
 		}
 
+		struct sockaddr_storage *addr_copy = malloc(sizeof(struct sockaddr_storage));
+		if (addr_copy == NULL){
+			free(new_node);
+			close(new_fd);
+			continue;
+		}
+		memcpy(addr_copy, &their_addr,sizeof(their_addr));
+
 		new_node->thread_complete_success = false;
 		new_node->conn_id = new_fd;
-		new_node->their_addr = &their_addr;
+		new_node->their_addr = addr_copy;
 		new_node->next_node = head;
 		head = new_node;
 
@@ -275,12 +285,23 @@ int main(int argc, char* argv[])
 
 	}
 	close(sockfd);
+
+	struct thread_node *curr = head;
+	while (curr != NULL){
+		pthread_join(curr->thread,NULL);
+		struct thread_node *tmp = curr;
+		curr = curr->next_node;
+		free(tmp->their_addr);
+		free(tmp);
+	}
 	if (remove("/var/tmp/aesdsocketdata") == 0) {
         printf("File '%s' deleted successfully.\n", "/var/tmp/aesdsocketdata");
     } else {
         fprintf(stderr, "Error deleting file: ");
         perror(""); 
     }
+
+	pthread_mutex_destroy(&mutex);
     closelog();
 
 	return 0;
