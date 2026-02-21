@@ -22,6 +22,8 @@
 
 volatile sig_atomic_t exit_flag = 0;
 
+pthread_mutex_t mutex; 
+
 struct thread_node {
 	pthread_t thread;
 	int  conn_id;
@@ -79,6 +81,7 @@ void* handle_connections(void *arg){
 		// Check if packet contains newline (packet complete)
 		if (memchr(packet, '\n', packet_len) != NULL)
 		{
+			pthread_mutex_lock(&mutex);
 			int fd = open("/var/tmp/aesdsocketdata", O_WRONLY | O_CREAT | O_APPEND, 0644);
 			if (fd >= 0) {
 				write(fd, packet, packet_len);
@@ -95,6 +98,7 @@ void* handle_connections(void *arg){
 				close(fd);
 			}
 
+			pthread_mutex_unlock(&mutex);
 			free(packet);
 			packet = NULL;
 			packet_len = 0;
@@ -111,7 +115,7 @@ void* handle_connections(void *arg){
 
 int main(int argc, char* argv[])
 {
-
+	pthread_mutex_init(&mutex, NULL);
 	struct sigaction sa;
 
     // Configure signal handler
