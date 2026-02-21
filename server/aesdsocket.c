@@ -14,11 +14,20 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <syslog.h>
+#include <pthread.h>
+#include <stdbool.h>
 
 #define MYPORT "9000"
 #define BACKLOG 10
 
 volatile sig_atomic_t exit_flag = 0;
+
+struct thread_node {
+	pthread_t thread;
+	int  conn_id;
+	bool thread_complete_success;
+	struct thread_node *next_node;
+};
 
 void handle_signal(int sig) {
     syslog(LOG_INFO, "Caught signal, exiting");
