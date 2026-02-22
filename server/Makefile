@@ -22,7 +22,7 @@
 CROSS_COMPILE ?=
 
 # Compiler selection
-CC = $(CROSS_COMPILE)gcc
+CC ?= $(CROSS_COMPILE)gcc
 
 # Name of the output executable
 TARGET = aesdsocket
@@ -31,7 +31,9 @@ TARGET = aesdsocket
 # -Wall   Enable all warnings
 # -Werror Treat warnings as errors
 # -g      Include debug symbols
-CFLAGS := -Wall -Werror -g -lpthread
+CFLAGS ?= -Wall -Werror -g 
+
+LDFLAGS ?= -lpthread -lrt
 
 # Source files
 SOURCES = aesdsocket.c
@@ -42,10 +44,11 @@ all: build
 # Build target
 # Compiles the source file(s) into the aesdsocket executable
 build: $(SOURCES)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCES)
+	$(CC) $(CFLAGS) $(SOURCES) -o $(TARGET) $(LDFLAGS)
 
 # Clean target
 # Removes the executable and all object files
+.PHONY: clean
 clean:
 	rm -f *.o $(TARGET)
 
