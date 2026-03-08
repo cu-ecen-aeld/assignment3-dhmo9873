@@ -56,7 +56,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
 	struct aesd_dev *dev = filp->private_data;
 	size_t entry_offset_byte_rtn;
-	size_t msg;
 	struct aesd_buffer_entry *current_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer,*f_pos,&entry_offset_byte_rtn);
 
 	
@@ -66,15 +65,15 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         return 0;
 	}
 
-	while (count > 0 && entry_offset_byte < current_entry->size) {
+	while (count > 0 && entry_offset_byte_rtn < current_entry->size) {
 
-		if (copy_to_user(buf, current_entry->buffptr + entry_offset_byte, 1)) {
-			mutex_unlock(&dev->lock);
+		if (copy_to_user(buf, current_entry->buffptr + entry_offset_byte_rtn, 1)) {
+			mutex_unlock(&dev->mutex_lock);
 			return -EFAULT;
 		}
 
 		buf++; 
-		entry_offset_byte++;
+		entry_offset_byte_rtn++;
 		(*f_pos)++;
 		retval++;
 		count--;
@@ -86,14 +85,41 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 }
 
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
-                loff_t *f_pos)
+		loff_t *f_pos)
 {
-    ssize_t retval = -ENOMEM;
-    PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
-    return retval;
+	PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
+	struct aesd_dev *dev = filp->private_data;
+	char *new_data;
+	const char *overwritten_ptr;
+
+	new_data = krealloc(dev->partial_write_buffer.buffptr, dev->partial_write_buffer.size + count, GFP_KERNEL);
+	if (!new_data) {
+		mutex_unlock(&dev->mutex_lock);
+		return -ENOMEM;
+	}
+
+	if (copy_from_user(new_data + dev->partial_write_buffer.size, buf, count)) {
+		mutex_unlock(&dev->mutex_lock);
+		return -EFAULT;
+	}
+
+	dev->partial_write_buffer.buffptr = new_data;
+	dev->partial_write_buffer.size += count;
+
+	if (new_data[dev->partial_write_buffer.size - 1] == '\n') {
+		overwritten_ptr = aesd_circular_buffer_add_entry(&dev->buffer, &dev->partial_write_buffer);
+		if (overwritten_ptr) {
+			kfree(overwritten_ptr);
+		}
+		dev->partial_write_buffer.buffptr = NULL;
+		dev->partial_write_buffer.size = 0;
+	}
+
+	mutex_unlock(&dev->mutex_lock);
+	return count;
+	/**
+	 * TODO: handle write
+	 */
 }
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
@@ -158,11 +184,11 @@ void aesd_cleanup_module(void)
 	int ind;
 	struct aesd_buffer_entry *entry;
 
-	AESD_CIRCULAR_BUFFER_FOREACH(entry, aesd_device.buffer, ind){
+	AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.buffer, ind){
 		kfree(entry->buffptr);
 	}
 
-	kfree(aesd_device.working_entry.buffptr);
+	kfree(aesd_device.partial_write_buffer.buffptr);
 
 	unregister_chrdev_region(devno, 1);
 }
