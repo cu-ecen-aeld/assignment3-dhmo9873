@@ -10,7 +10,8 @@
  * @copyright Copyright (c) 2019
  *
  */
-
+//https://www.google.com/search?q=container_of+linux&sxsrf=ANbL-n4Rlsx1iceB76YixxQ9GeqcLngSbA%3A1772957288258
+//https://codefinity.com/courses/v2/d2508ed4-bbc6-406b-b4a1-ba4945da1862/99ffb985-49f1-4aaa-9146-e72f2626d70b/ceb5732e-671f-4df1-b0a6-52cd8d664eb6
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/printk.h>
@@ -29,9 +30,13 @@ struct aesd_dev aesd_device;
 int aesd_open(struct inode *inode, struct file *filp)
 {
     PDEBUG("open");
+	struct aesd_dev *dev;
+	dev = container_of(inode->i_cdev,struct aesd_dev, cdev);
+	filp->private_data = dev;
     /**
      * TODO: handle open
      */
+	
     return 0;
 }
 
@@ -49,10 +54,35 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
     ssize_t retval = 0;
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
-    return retval;
+	struct aesd_dev *dev = filp->private_data;
+	size_t entry_offset_byte_rtn;
+	size_t msg;
+	struct aesd_buffer_entry *current_entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->buffer,*f_pos,&entry_offset_byte_rtn);
+
+	
+
+    if (current_entry == NULL){
+		mutex_unlock(&dev->mutex_lock);
+        return 0;
+	}
+
+	while (count > 0 && entry_offset_byte < current_entry->size) {
+
+		if (copy_to_user(buf, current_entry->buffptr + entry_offset_byte, 1)) {
+			mutex_unlock(&dev->lock);
+			return -EFAULT;
+		}
+
+		buf++; 
+		entry_offset_byte++;
+		(*f_pos)++;
+		retval++;
+		count--;
+	}
+	/**
+	 * TODO: handle read
+	 */
+	return retval;
 }
 
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
