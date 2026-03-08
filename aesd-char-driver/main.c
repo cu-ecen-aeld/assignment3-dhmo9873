@@ -21,7 +21,7 @@
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("DHIGVIJAY MOHAN"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
@@ -105,6 +105,7 @@ int aesd_init_module(void)
     /**
      * TODO: initialize the AESD specific portion of the device
      */
+	 mutex_init(&aesd_device.mutex_lock);
 
     result = aesd_setup_cdev(&aesd_device);
 
@@ -124,8 +125,16 @@ void aesd_cleanup_module(void)
     /**
      * TODO: cleanup AESD specific poritions here as necessary
      */
+	int ind;
+	struct aesd_buffer_entry *entry;
 
-    unregister_chrdev_region(devno, 1);
+	AESD_CIRCULAR_BUFFER_FOREACH(entry, aesd_device.buffer, ind){
+		kfree(entry->buffptr);
+	}
+
+	kfree(aesd_device.working_entry.buffptr);
+
+	unregister_chrdev_region(devno, 1);
 }
 
 
