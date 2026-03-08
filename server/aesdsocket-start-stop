@@ -15,11 +15,14 @@
 NAME="aesdsocket"
 DAEMON="/usr/bin/aesdsocket"
 PIDFILE="/var/run/${NAME}.pid"
+MODULE="aesdchar"
 
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 
 case "$1" in
     start)
+		echo "Loading kernel module $MODULE"
+		modprobe $MODULE || insmod /lib/modules/$(uname -r)/extra/${MODULE}.ko
         echo "Starting $NAME"
         start-stop-daemon --start \
             --quiet \
@@ -34,6 +37,8 @@ case "$1" in
             --quiet \
             --pidfile $PIDFILE \
             --remove-pidfile
+		echo "Unloading kernel module $MODULE"
+		rmmod $MODULE
         ;;
     restart)
         $0 stop
