@@ -17,11 +17,16 @@ obj-m	:= aesdchar.o
 aesdchar-y := aesd-circular-buffer.o main.o
 else
 
+KERNELDIR ?= $(KERNEL_SRC)
+
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD       := $(shell pwd)
 
 modules:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+modules_install:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
 
 endif
 

@@ -21,6 +21,16 @@
 #define MYPORT "9000"
 #define BACKLOG 10
 
+#ifndef USE_AESD_CHAR_DEVICE
+#define USE_AESD_CHAR_DEVICE 1
+#endif
+
+#if USE_AESD_CHAR_DEVICE
+    #define DATA_FILE "/dev/aesdchar"
+#else
+    #define DATA_FILE "/var/tmp/aesdsocketdata"
+#endif
+
 volatile sig_atomic_t exit_flag = 0;
 
 pthread_mutex_t mutex; 
@@ -55,7 +65,7 @@ void* timestamp_thread(void *arg)
         int len = snprintf(finalbuf, sizeof(finalbuf), "timestamp:%s\n", timebuf);
 
         pthread_mutex_lock(&mutex);
-        int fd = open("/var/tmp/aesdsocketdata", O_WRONLY | O_CREAT | O_APPEND, 0644);
+        int fd = open(DATA_FILE, O_WRONLY | O_CREAT | O_APPEND, 0644);
         if (fd >= 0) {
             write(fd, finalbuf, len);
             close(fd);
@@ -111,14 +121,14 @@ void* handle_connections(void *arg){
 		if (memchr(packet, '\n', packet_len) != NULL)
 		{
 			pthread_mutex_lock(&mutex);
-			int fd = open("/var/tmp/aesdsocketdata", O_WRONLY | O_CREAT | O_APPEND, 0644);
+			int fd = open(DATA_FILE, O_WRONLY | O_CREAT | O_APPEND, 0644);
 			if (fd >= 0) {
 				write(fd, packet, packet_len);
 				close(fd);
 			}
 
 			// Send entire file contents back to client
-			fd = open("/var/tmp/aesdsocketdata", O_RDONLY);
+			fd = open(DATA_FILE, O_RDONLY);
 			if (fd >= 0) {
 				ssize_t r;
 				while ((r = read(fd, buffer, sizeof(buffer))) > 0) {
@@ -242,9 +252,10 @@ int main(int argc, char* argv[])
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
     }
-
+#if !USE_AESD_CHAR_DEVICE
 	pthread_t timer_thread_id;
     pthread_create(&timer_thread_id, NULL, timestamp_thread, NULL);
+#endif
 
     /*
      * Main server loop:
@@ -329,15 +340,18 @@ int main(int argc, char* argv[])
 		free(tmp);
 	}
 
-	pthread_join(timer_thread_id, NULL);
+#if !USE_AESD_CHAR_DEVICE
+    pthread_join(timer_thread_id, NULL);
+#endif
 
-
-	if (remove("/var/tmp/aesdsocketdata") == 0) {
-        printf("File '%s' deleted successfully.\n", "/var/tmp/aesdsocketdata");
+#if !USE_AESD_CHAR_DEVICE
+	if (remove(DATA_FILE) == 0) {
+        printf("File '%s' deleted successfully.\n", DATA_FILE);
     } else {
         fprintf(stderr, "Error deleting file: ");
         perror(""); 
     }
+#endif
 
 	pthread_mutex_destroy(&mutex);
     closelog();

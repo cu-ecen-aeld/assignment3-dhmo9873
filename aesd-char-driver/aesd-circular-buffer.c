@@ -29,31 +29,33 @@
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
-    /**
-    * TODO: implement per description
-    */
-	int total_size = 0;                                   // Tracks cumulative bytes processed across entries
-	int ind = buffer->out_offs;                           // Start from the oldest entry in the circular buffer
+    size_t total_size = 0;                         // Tracks cumulative bytes processed
+    uint8_t count;
+    uint8_t ind;
 
-	for(int count = 0; count < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; count++) {
-        struct aesd_buffer_entry *current_entry = &buffer->entry[ind];  // Pointer to current buffer entry
+    // Determine number of valid entries
+    uint8_t num_entries = buffer->full ? 
+        AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED : buffer->in_offs;
 
-        // Check if the target offset falls within the current entry
+    for (count = 0; count < num_entries; count++) {
+
+        // Calculate current index starting from out_offs and wrapping
+        ind = (buffer->out_offs + count) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+
+        struct aesd_buffer_entry *current_entry = &buffer->entry[ind];
+
+        // Check if char_offset falls inside this entry
         if (char_offset < (total_size + current_entry->size)) {
-            *entry_offset_byte_rtn = char_offset - total_size;           // Calculate byte offset within entry
-            return current_entry;                                       // Return pointer to matching entry
+            *entry_offset_byte_rtn = char_offset - total_size;
+            return current_entry;
         }
 
-        total_size += current_entry->size;                              // Move cumulative offset forward
-        ind = (ind + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;      // Wrap index if it reaches buffer end
+        total_size += current_entry->size;
+    }
 
-        // Stop if we've reached the write position in a non-full buffer
-        if (ind == buffer->in_offs && !buffer->full) {
-            break; 
-        }
-	}
-    return NULL;                                                        // Return NULL if offset not found
+    return NULL;
 }
+
 /**
 * Adds entry @param add_entry to @param buffer in the location specified in buffer->in_offs.
 * If the buffer was already full, overwrites the oldest entry and advances buffer->out_offs to the
@@ -61,23 +63,26 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-	buffer->entry[buffer->in_offs] = *add_entry;                        // Store the new entry at the current write position
+	const char *ret_addr = NULL;
 
-	buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;  // Move write index forward, wrapping around if needed
+	if (buffer->full) {
+        ret_addr = buffer->entry[buffer->in_offs].buffptr;
 
-	if(buffer->full){                                                   // If buffer is full, the oldest entry will be overwritten
-		buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; // Advance read index to maintain consistency
+        // Advance out_offs because the oldest entry is being overwritten
+        buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    }
+
+	buffer->entry[buffer->in_offs] = *add_entry;  // Store the new entry at the current write position
+
+	buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;  // Move write index forward
+
+	if(buffer->in_offs == buffer->out_offs ) {   // When write index catches up to read index
+		buffer->full = true;                    // Mark buffer as full
 	}
 
-	if(buffer->in_offs == buffer->out_offs) {                           // When write index catches up to read index, buffer is full
-		buffer->full = true;                                            // Mark buffer as full
-	}
-
-    /**
-    * TODO: implement per description
-    */
+	return ret_addr;
 }
 /**
 * Initializes the circular buffer described by @param buffer to an empty struct
