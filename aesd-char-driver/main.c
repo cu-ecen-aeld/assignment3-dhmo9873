@@ -155,8 +155,6 @@ loff_t aesd_lseek(struct file *filp, loff_t offset, int whence){
     }
     PDEBUG("current value of the file position %lld\n",filp->f_pos);
 
-	mutex_lock(&dev->mutex_lock);
-
 	switch(whence){
 		case SEEK_SET:
 			temp = offset;
