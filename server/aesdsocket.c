@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <time.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 #define MYPORT "9000"
 #define BACKLOG 10
@@ -116,7 +117,7 @@ void* handle_connections(void *arg){
 		packet = temp;
 		memcpy(packet + packet_len, buffer, bytes);
 		packet_len += bytes;
-
+#if 0
 		// Check if packet contains newline (packet complete)
 		if (memchr(packet, '\n', packet_len) != NULL)
 		{
@@ -142,6 +143,59 @@ void* handle_connections(void *arg){
 			packet = NULL;
 			packet_len = 0;
 		}
+#else
+		if (memchr(packet, '\n', packet_len) != NULL) 
+		{
+			const char *ioctl_header = "AESDCHAR_IOCSEEKTO:";
+
+			if (strncmp(packet, ioctl_header, strlen(ioctl_header)) == 0) 
+			{
+				unsigned int write_cmd, write_cmd_offset;
+				if (sscanf(packet, "AESDCHAR_IOCSEEKTO:%u,%u", &write_cmd, &write_cmd_offset) == 2) 
+				{
+					struct aesd_seekto seekto;
+					seekto.write_cmd = write_cmd;
+					seekto.write_cmd_offset = write_cmd_offset;
+
+					int fd = open(DATA_FILE, O_RDWR);
+					if (fd >= 0) {
+						if (ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto) == 0) {
+							char read_buf[1024];
+							ssize_t r;
+							while ((r = read(fd, read_buf, sizeof(read_buf))) > 0) {
+								send(conn->conn_id, read_buf, r, 0);
+							}
+						}
+						close(fd);
+					}
+				}
+			} 
+			else 
+			{
+				pthread_mutex_lock(&mutex);
+				int fd = open(DATA_FILE, O_WRONLY | O_CREAT | O_APPEND, 0644);
+				if (fd >= 0) {
+					write(fd, packet, packet_len);
+					close(fd);
+				}
+
+				// Send entire file contents back to client
+				fd = open(DATA_FILE, O_RDONLY);
+				if (fd >= 0) {
+					ssize_t r;
+					while ((r = read(fd, buffer, sizeof(buffer))) > 0) {
+						send(conn->conn_id, buffer, r, 0);
+					}
+					close(fd);
+				}
+				pthread_mutex_unlock(&mutex);
+			}
+
+			free(packet);
+			packet = NULL;
+			packet_len = 0;
+		}
+#endif
 	}
 	free(packet);
 	close(conn->conn_id);
