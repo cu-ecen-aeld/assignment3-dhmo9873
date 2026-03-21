@@ -12,6 +12,8 @@
  */
 //https://www.google.com/search?q=container_of+linux&sxsrf=ANbL-n4Rlsx1iceB76YixxQ9GeqcLngSbA%3A1772957288258
 //https://codefinity.com/courses/v2/d2508ed4-bbc6-406b-b4a1-ba4945da1862/99ffb985-49f1-4aaa-9146-e72f2626d70b/ceb5732e-671f-4df1-b0a6-52cd8d664eb6
+//https://man7.org/linux/man-pages/man2/lseek.2.html
+//https://fastbitlab.com/linux-device-driver-programming-lecture-45-lseek-method-implementation/
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/printk.h>
@@ -130,12 +132,66 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     return retval;
 }
 
+loff_t aesd_lseek(struct file *filp, loff_t offset, int whence){
+
+	struct aesd_dev *dev = filp->private_data;
+	loff_t temp;
+	int count,index;
+    uint8_t entries;
+	size_t total_size=0;
+
+	if (mutex_lock_interruptible(&dev->mutex_lock)) {
+        return -ERESTARTSYS;
+    }
+
+	entries = dev->buffer.full ? AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED : dev->buffer.in_offs;
+
+    for (count = 0; count < entries; count++) {
+        index = (dev->buffer.out_offs + count) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        entry = &dev->buffer.entry[index];
+        if (entry->buffptr != NULL) {
+            total_size += entry->size;
+        }
+    }
+    PDEBUG("current value of the file position %lld\n",filp->f_pos);
+
+	mutex_lock(&dev->mutex_lock);
+
+	switch(whence){
+		case SEEK_SET:
+			temp = offset;
+			break;
+		case SEEK_CUR:
+			temp = filp->f_pos + offset;
+			break;
+		case SEEK_END:
+			temp = total_size + offset ;
+			break;
+		default:
+			mutex_unlock(&dev->mutex_lock);
+            return -EINVAL;	
+	}
+	
+	if (temp < 0 || temp > total_size) {
+        mutex_unlock(&dev->mutex_lock);
+        return -EINVAL;
+    }
+	filp->f_pos = temp;
+
+    mutex_unlock(&dev->mutex_lock);
+	PDEBUG("lseek successful. New pos: %lld", temp);
+    return temp;
+
+
+}
+
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
     .read =     aesd_read,
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
+	.llseek = aesd_lseek,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
