@@ -25,6 +25,7 @@
 
 #include "aesd-circular-buffer.h"
 #include <linux/mutex.h>
+#include "aesd_ioctl.h"
 
 struct aesd_dev
 {
